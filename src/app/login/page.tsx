@@ -27,13 +27,13 @@ export default function LoginPage() {
 
   const checkUserRoleAndRedirect = async (userId: string) => {
     try {
-      const { data: profile } = await supabase
+      const { data: profile } = await (supabase as any)
         .from('profiles')
         .select('role')
         .eq('id', userId)
         .single();
 
-      if (profile?.role === 'admin') {
+      if (profile && profile.role === 'admin') {
         router.push('/admin');
       } else {
         router.push('/menu');
