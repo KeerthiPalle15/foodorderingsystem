@@ -24,6 +24,9 @@ interface RecentOrder {
   payment_status: string;
   created_at: string;
   user_id: string;
+  delivery_address: string;
+  delivery_latitude: number | null;
+  delivery_longitude: number | null;
 }
 
 interface TopFood {
@@ -277,6 +280,7 @@ export default function AdminDashboard() {
                     <th className="pb-3 font-medium">Order ID</th>
                     <th className="pb-3 font-medium">Total</th>
                     <th className="pb-3 font-medium">Status</th>
+                    <th className="pb-3 font-medium">Location</th>
                     <th className="pb-3 font-medium">Date</th>
                   </tr>
                 </thead>
@@ -295,6 +299,23 @@ export default function AdminDashboard() {
                         }`}>
                           {order.status.replace(/_/g, ' ')}
                         </span>
+                      </td>
+                      <td className="py-3">
+                        {order.delivery_latitude && order.delivery_longitude ? (
+                          <a 
+                            href={`https://www.openstreetmap.org/?mlat=${order.delivery_latitude}&mlon=${order.delivery_longitude}&zoom=17`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-orange-600 hover:text-orange-700"
+                            title={order.delivery_address}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            </svg>
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
                       <td className="py-3 text-gray-500">
                         {formatDateTime(order.created_at)}

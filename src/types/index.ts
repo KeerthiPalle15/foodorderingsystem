@@ -80,6 +80,8 @@ export interface Order {
   total: number;
   coupon_code?: string;
   delivery_address: string;
+  delivery_latitude?: number | null;
+  delivery_longitude?: number | null;
   delivery_phone: string;
   delivery_instructions?: string;
   payment_method: PaymentMethod;

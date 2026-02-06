@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header, Footer } from '@/components/customer';
+import { AddressMap } from '@/components/customer/AddressMap';
 import { Button, Card, Input } from '@/components/ui';
 import { useCart } from '@/lib/hooks-cart';
 import { supabase } from '@/lib/supabase/client';
@@ -19,6 +20,8 @@ interface DeliveryInfo {
   state: string;
   zipCode: string;
   instructions: string;
+  latitude: number;
+  longitude: number;
 }
 
 interface OrderItem {
@@ -30,12 +33,13 @@ interface OrderItem {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, getSubtotal, getDeliveryFee, getTax, getTotal, clearCart, applyCoupon, removeCoupon, getDiscount } = useCart();
+  const { items, getSubtotal, getDeliveryFee, getTax, getTotal, clearCart, applyCoupon, removeCoupon, getDiscount, couponCode: storeCouponCode } = useCart();
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [promoCode, setPromoCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
-  const [paymentMethod, setPaymentMethod] = useState('card');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [mapAddress, setMapAddress] = useState('');
   
   const [deliveryInfo, setDeliveryInfo] = useState<DeliveryInfo>({
     fullName: '',
@@ -46,10 +50,25 @@ export default function CheckoutPage() {
     state: '',
     zipCode: '',
     instructions: '',
+    latitude: 0,
+    longitude: 0,
   });
 
   useEffect(() => {
     fetchUser();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        setUser(session.user);
+        setDeliveryInfo(prev => ({ ...prev, email: session.user?.email || '' }));
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        router.push('/login');
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const fetchUser = async () => {
@@ -60,6 +79,16 @@ export default function CheckoutPage() {
     }
     setUser(session.user);
     setDeliveryInfo(prev => ({ ...prev, email: session.user.email || '' }));
+  };
+
+  const handleAddressSelect = (address: string, lat: number, lng: number) => {
+    setMapAddress(address);
+    setDeliveryInfo(prev => ({
+      ...prev,
+      address: address,
+      latitude: lat,
+      longitude: lng,
+    }));
   };
 
   const handleApplyCoupon = async () => {
@@ -117,12 +146,38 @@ export default function CheckoutPage() {
 
     if (items.length === 0) {
       toast.error('Your cart is empty');
+      setLoading(false);
+      return;
+    }
+
+    // Validate required fields
+    if (!deliveryInfo.fullName.trim()) {
+      toast.error('Please enter your full name');
+      setLoading(false);
+      return;
+    }
+    if (!deliveryInfo.phone.trim()) {
+      toast.error('Please enter your phone number');
+      setLoading(false);
+      return;
+    }
+    if (!deliveryInfo.city.trim()) {
+      toast.error('Please enter your city');
+      setLoading(false);
+      return;
+    }
+    if (!deliveryInfo.address.trim() && !mapAddress.trim()) {
+      toast.error('Please select a delivery location from the map or enter an address');
+      setLoading(false);
       return;
     }
 
     setLoading(true);
 
     try {
+      // Get auth token for API request
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const orderItems: OrderItem[] = items.map((item) => ({
         food_id: item.food_item.id,
         name: item.food_item.name,
@@ -131,23 +186,22 @@ export default function CheckoutPage() {
       }));
 
       const orderData = {
-        user_id: user.id,
         items: orderItems,
-        subtotal,
-        delivery_fee: deliveryFee,
-        tax,
-        discount,
-        total: finalTotal,
-        status: 'pending',
-        delivery_info: deliveryInfo,
-        payment_method: paymentMethod,
-        payment_status: 'pending',
-        coupon_id: appliedCoupon?.id || null,
+        deliveryAddress: deliveryInfo.address || mapAddress,
+        deliveryPhone: deliveryInfo.phone,
+        deliveryInstructions: deliveryInfo.instructions,
+        paymentMethod,
+        couponCode: storeCouponCode,
+        latitude: deliveryInfo.latitude || 0,
+        longitude: deliveryInfo.longitude || 0,
       };
 
       const response = await fetch('/api/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': session ? `Bearer ${session.access_token}` : '',
+        },
         body: JSON.stringify(orderData),
       });
 
@@ -236,31 +290,35 @@ export default function CheckoutPage() {
                   onChange={(e) => setDeliveryInfo({ ...deliveryInfo, zipCode: e.target.value })}
                   required
                 />
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Delivery Address
-                  </label>
-                  <textarea
-                    value={deliveryInfo.address}
-                    onChange={(e) => setDeliveryInfo({ ...deliveryInfo, address: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    placeholder="Enter your full address"
-                    required
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Delivery Instructions (optional)
-                  </label>
-                  <textarea
-                    value={deliveryInfo.instructions}
-                    onChange={(e) => setDeliveryInfo({ ...deliveryInfo, instructions: e.target.value })}
-                    rows={2}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    placeholder="E.g., Ring the doorbell, leave at door..."
-                  />
-                </div>
+              </div>
+              
+              {/* Address Map */}
+              <div className="mt-6">
+                <AddressMap 
+                  onAddressSelect={handleAddressSelect}
+                  initialAddress={mapAddress}
+                />
+              </div>
+              
+              {/* Hidden address field for form validation */}
+              <input 
+                type="hidden" 
+                name="address" 
+                value={deliveryInfo.address} 
+                required 
+              />
+              
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Delivery Instructions (optional)
+                </label>
+                <textarea
+                  value={deliveryInfo.instructions}
+                  onChange={(e) => setDeliveryInfo({ ...deliveryInfo, instructions: e.target.value })}
+                  rows={2}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="E.g., Ring the doorbell, leave at door..."
+                />
               </div>
             </Card>
 
@@ -268,26 +326,6 @@ export default function CheckoutPage() {
             <Card className="p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Payment Method</h2>
               <div className="space-y-3">
-                <label className={`flex items-center gap-4 p-4 border rounded-xl cursor-pointer transition-colors ${
-                  paymentMethod === 'card' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
-                }`}>
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="card"
-                    checked={paymentMethod === 'card'}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="text-orange-500"
-                  />
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">Credit/Debit Card</p>
-                    <p className="text-sm text-gray-500">Pay securely with Razorpay</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium">Visa</span>
-                    <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium">Mastercard</span>
-                  </div>
-                </label>
                 <label className={`flex items-center gap-4 p-4 border rounded-xl cursor-pointer transition-colors ${
                   paymentMethod === 'cash' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
                 }`}>
@@ -303,8 +341,17 @@ export default function CheckoutPage() {
                     <p className="font-medium text-gray-900">Cash on Delivery</p>
                     <p className="text-sm text-gray-500">Pay when you receive your order</p>
                   </div>
+                  <div className="flex gap-2">
+                    <span className="px-2 py-1 bg-green-100 rounded text-xs font-medium text-green-700">✓ Available</span>
+                  </div>
                 </label>
               </div>
+              <p className="mt-4 text-sm text-gray-500 flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Pay with cash when your order is delivered at your doorstep
+              </p>
             </Card>
 
             {/* Promo Code */}

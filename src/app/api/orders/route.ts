@@ -74,22 +74,60 @@ export async function POST(request: NextRequest) {
       paymentMethod,
       couponCode,
       couponId,
+      latitude,
+      longitude,
     } = body;
 
-    // Get user from auth session for security
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
+    // Get user from auth header for security
+    const authHeader = request.headers.get('Authorization');
+    let userId = null;
+    
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      if (!error && user) {
+        userId = user.id;
+      }
+    }
+    
+    if (!userId) {
+      // Fallback: try to get session directly
+      const { data: { session } } = await supabase.auth.getSession();
+      userId = session?.user?.id;
+    }
+
+    if (!userId) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized - Please sign in to place an order' },
         { status: 401 }
       );
     }
-    const userId = session.user.id;
 
     // Validate required fields
-    if (!items || !deliveryAddress || !deliveryPhone || !paymentMethod) {
+    if (!items || items.length === 0) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Your cart is empty' },
+        { status: 400 }
+      );
+    }
+    
+    if (!deliveryAddress || deliveryAddress.trim() === '') {
+      return NextResponse.json(
+        { error: 'Delivery address is required' },
+        { status: 400 }
+      );
+    }
+    
+    if (!deliveryPhone || deliveryPhone.trim() === '') {
+      return NextResponse.json(
+        { error: 'Phone number is required' },
+        { status: 400 }
+      );
+    }
+    
+    if (!paymentMethod) {
+      return NextResponse.json(
+        { error: 'Payment method is required' },
         { status: 400 }
       );
     }
@@ -101,7 +139,7 @@ export async function POST(request: NextRequest) {
       0
     );
 
-    const discount = 0; // Calculate based on coupon
+    const discount = 0; // Calculate based on coupon if provided
     const deliveryFee = subtotal > 0 ? 2.99 : 0;
     const tax = (subtotal - discount) * 0.08;
     const total = subtotal - discount + deliveryFee + tax;
@@ -122,6 +160,8 @@ export async function POST(request: NextRequest) {
         total,
         coupon_code: couponCode,
         delivery_address: deliveryAddress,
+        delivery_latitude: latitude || null,
+        delivery_longitude: longitude || null,
         delivery_phone: deliveryPhone,
         delivery_instructions: deliveryInstructions,
         payment_method: paymentMethod,
@@ -129,7 +169,7 @@ export async function POST(request: NextRequest) {
         status: 'pending',
       })
       .select()
-      .single();
+      .single() as { data: any; error: any };
 
     if (orderError) {
       return NextResponse.json({ error: orderError.message }, { status: 500 });
@@ -142,18 +182,17 @@ export async function POST(request: NextRequest) {
     const orderId = order.id;
 
     // Create order items - map from the correct field names
-    const orderItems = items.map((item: { foodItemId?: string; food_id?: string; food_item_id?: string; price: number; quantity: number; specialInstructions?: string }) => ({
+    const orderItems = items.map((item: { food_id?: string; price: number; quantity: number }) => ({
       order_id: orderId,
-      food_item_id: item.foodItemId || item.food_id || item.food_item_id,
+      food_item_id: item.food_id,
       quantity: item.quantity,
       unit_price: item.price,
       subtotal: item.price * item.quantity,
-      special_instructions: item.specialInstructions,
     }));
 
     const { error: itemsError } = await supabase
       .from('order_items')
-      .insert(orderItems);
+      .insert(orderItems) as { error: any };
 
     if (itemsError) {
       return NextResponse.json({ error: itemsError.message }, { status: 500 });

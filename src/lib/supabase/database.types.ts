@@ -142,6 +142,8 @@ export interface Database {
           total: number;
           coupon_code: string | null;
           delivery_address: string;
+          delivery_latitude: number | null;
+          delivery_longitude: number | null;
           delivery_phone: string;
           delivery_instructions: string | null;
           payment_method: 'card' | 'cash' | 'razorpay';
@@ -164,6 +166,8 @@ export interface Database {
           total: number;
           coupon_code?: string | null;
           delivery_address: string;
+          delivery_latitude?: number | null;
+          delivery_longitude?: number | null;
           delivery_phone: string;
           delivery_instructions?: string | null;
           payment_method?: 'card' | 'cash' | 'razorpay';

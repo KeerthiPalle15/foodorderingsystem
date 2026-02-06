@@ -76,10 +76,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleDemoLogin = async () => {
-    router.push('/menu');
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 flex items-center justify-center p-4">
       {/* Decorative Elements */}
@@ -104,23 +100,6 @@ export default function LoginPage() {
             <p className="mt-2 text-gray-500">
               {isSignUp ? 'Sign up to start ordering delicious food' : 'Sign in to your account'}
             </p>
-          </div>
-
-          {/* Demo Login Button */}
-          <button
-            onClick={handleDemoLogin}
-            className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-medium rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg shadow-orange-500/25 mb-6"
-          >
-            Continue as Guest (Demo)
-          </button>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">Or continue with email</span>
-            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
