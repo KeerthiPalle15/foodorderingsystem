@@ -67,17 +67,27 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
-      userId,
       items,
       deliveryAddress,
       deliveryPhone,
       deliveryInstructions,
       paymentMethod,
       couponCode,
+      couponId,
     } = body;
 
+    // Get user from auth session for security
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    const userId = session.user.id;
+
     // Validate required fields
-    if (!userId || !items || !deliveryAddress || !deliveryPhone || !paymentMethod) {
+    if (!items || !deliveryAddress || !deliveryPhone || !paymentMethod) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -117,7 +127,7 @@ export async function POST(request: NextRequest) {
         payment_method: paymentMethod,
         payment_status: 'pending',
         status: 'pending',
-      } as any)
+      })
       .select()
       .single();
 
@@ -125,13 +135,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: orderError.message }, { status: 500 });
     }
 
-    // @ts-ignore
-    const orderId = order?.id;
+    if (!order) {
+      return NextResponse.json({ error: 'Order creation failed' }, { status: 500 });
+    }
 
-    // Create order items
-    const orderItems = items.map((item: { foodItemId: string; price: number; quantity: number; specialInstructions?: string }) => ({
+    const orderId = order.id;
+
+    // Create order items - map from the correct field names
+    const orderItems = items.map((item: { foodItemId?: string; food_id?: string; food_item_id?: string; price: number; quantity: number; specialInstructions?: string }) => ({
       order_id: orderId,
-      food_item_id: item.foodItemId,
+      food_item_id: item.foodItemId || item.food_id || item.food_item_id,
       quantity: item.quantity,
       unit_price: item.price,
       subtotal: item.price * item.quantity,

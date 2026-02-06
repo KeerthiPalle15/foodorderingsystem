@@ -30,11 +30,10 @@ interface OrderItem {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, getSubtotal, getDeliveryFee, getTax, getTotal, clearCart } = useCart();
+  const { items, getSubtotal, getDeliveryFee, getTax, getTotal, clearCart, applyCoupon, removeCoupon, getDiscount } = useCart();
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [promoCode, setPromoCode] = useState('');
-  const [discount, setDiscount] = useState(0);
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [paymentMethod, setPaymentMethod] = useState('card');
   
@@ -81,10 +80,12 @@ export default function CheckoutPage() {
       }
 
       setAppliedCoupon(data.coupon);
-      setDiscount(data.coupon.discount_type === 'percentage' 
-        ? (getSubtotal() * data.coupon.discount_value / 100)
-        : data.coupon.discount_value
-      );
+      applyCoupon(data.coupon.code, {
+        type: data.coupon.type,
+        discount_value: data.coupon.discount_value,
+        minimum_order: data.coupon.minimum_order,
+        maximum_discount: data.coupon.maximum_discount,
+      });
       toast.success('Coupon applied successfully!');
     } catch (error) {
       toast.error('Failed to apply coupon');
@@ -93,7 +94,7 @@ export default function CheckoutPage() {
 
   const handleRemoveCoupon = () => {
     setAppliedCoupon(null);
-    setDiscount(0);
+    removeCoupon();
     setPromoCode('');
     toast.success('Coupon removed');
   };
@@ -101,6 +102,7 @@ export default function CheckoutPage() {
   const subtotal = getSubtotal();
   const deliveryFee = getDeliveryFee();
   const tax = getTax();
+  const discount = getDiscount();
   const total = getTotal() - discount;
   const finalTotal = Math.max(total, 0);
 
@@ -330,7 +332,7 @@ export default function CheckoutPage() {
               {appliedCoupon && (
                 <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-green-700 font-medium">
-                    {appliedCoupon.code} applied: {appliedCoupon.discount_type === 'percentage' 
+                    {appliedCoupon.code} applied: {appliedCoupon.type === 'percentage' 
                       ? `${appliedCoupon.discount_value}% off` 
                       : formatCurrency(appliedCoupon.discount_value) + ' off'}
                   </p>

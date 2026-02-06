@@ -7,12 +7,18 @@ import { CartItem, FoodItem } from '@/types';
 interface CartState {
   items: CartItem[];
   couponCode: string | null;
+  couponDetails: {
+    type: 'percentage' | 'fixed';
+    discount_value: number;
+    minimum_order: number;
+    maximum_discount?: number;
+  } | null;
   setItems: (items: CartItem[]) => void;
   addItem: (foodItem: FoodItem, specialInstructions?: string) => void;
   removeItem: (foodItemId: string) => void;
   updateQuantity: (foodItemId: string, quantity: number) => void;
   updateSpecialInstructions: (foodItemId: string, instructions: string) => void;
-  applyCoupon: (code: string) => void;
+  applyCoupon: (code: string, details?: any) => void;
   removeCoupon: () => void;
   clearCart: () => void;
   getSubtotal: () => number;
@@ -31,6 +37,7 @@ export const useCartStore = create<CartState>()(
     (set, get) => ({
       items: [],
       couponCode: null,
+      couponDetails: null,
 
       addItem: (foodItem: FoodItem, specialInstructions?: string) => {
         set((state) => {
@@ -91,16 +98,16 @@ export const useCartStore = create<CartState>()(
         }));
       },
 
-      applyCoupon: (code: string) => {
-        set({ couponCode: code });
+      applyCoupon: (code: string, details?: any) => {
+        set({ couponCode: code, couponDetails: details || null });
       },
 
       removeCoupon: () => {
-        set({ couponCode: null });
+        set({ couponCode: null, couponDetails: null });
       },
 
       clearCart: () => {
-        set({ items: [], couponCode: null });
+        set({ items: [], couponCode: null, couponDetails: null });
       },
 
       setItems: (items: CartItem[]) => {
@@ -115,7 +122,29 @@ export const useCartStore = create<CartState>()(
       },
 
       getDiscount: () => {
-        return 0; // Will be calculated based on coupon validation
+        const { couponDetails } = get();
+        if (!couponDetails) return 0;
+        
+        const subtotal = get().getSubtotal();
+        
+        // Check minimum order requirement
+        if (subtotal < couponDetails.minimum_order) {
+          return 0;
+        }
+        
+        let discount = 0;
+        if (couponDetails.type === 'percentage') {
+          discount = subtotal * (couponDetails.discount_value / 100);
+        } else {
+          discount = couponDetails.discount_value;
+        }
+        
+        // Apply maximum discount if set
+        if (couponDetails.maximum_discount) {
+          discount = Math.min(discount, couponDetails.maximum_discount);
+        }
+        
+        return discount;
       },
 
       getDeliveryFee: () => {

@@ -7,11 +7,15 @@ import { Header, Footer, CartItem } from '@/components/customer';
 import { Button, Card } from '@/components/ui';
 import { useCart } from '@/lib/hooks-cart';
 import { formatCurrency } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
 export default function CartPage() {
   const router = useRouter();
-  const { items, getSubtotal, getDeliveryFee, getTax, getTotal, clearCart } = useCart();
+  const { items, getSubtotal, getDeliveryFee, getTax, getTotal, getDiscount, clearCart, applyCoupon, removeCoupon } = useCart();
   const [loading, setLoading] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
 
   if (items.length === 0) {
     return (
@@ -41,7 +45,49 @@ export default function CartPage() {
   const subtotal = getSubtotal();
   const deliveryFee = getDeliveryFee();
   const tax = getTax();
-  const total = getTotal();
+  const discount = getDiscount();
+  const total = subtotal - discount + deliveryFee + tax;
+  const finalTotal = Math.max(total, 0);
+
+  const handleApplyCoupon = async () => {
+    if (!promoCode.trim()) return;
+    
+    setApplyingCoupon(true);
+    try {
+      const response = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoCode }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.error || 'Invalid coupon code');
+        return;
+      }
+
+      setAppliedCoupon(data.coupon);
+      applyCoupon(data.coupon.code, {
+        type: data.coupon.type,
+        discount_value: data.coupon.discount_value,
+        minimum_order: data.coupon.minimum_order,
+        maximum_discount: data.coupon.maximum_discount,
+      });
+      toast.success('Coupon applied successfully!');
+    } catch (error) {
+      toast.error('Failed to apply coupon');
+    } finally {
+      setApplyingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    removeCoupon();
+    setPromoCode('');
+    toast.success('Coupon removed');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -85,6 +131,12 @@ export default function CartPage() {
                     <span>Subtotal</span>
                     <span className="font-medium">{formatCurrency(subtotal)}</span>
                   </div>
+                  {discount > 0 && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Discount</span>
+                      <span className="font-medium">-{formatCurrency(discount)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-gray-600">
                     <span>Delivery Fee</span>
                     <span className="font-medium">{formatCurrency(deliveryFee)}</span>
@@ -96,7 +148,7 @@ export default function CartPage() {
                   <div className="border-t border-gray-100 pt-3">
                     <div className="flex justify-between font-bold text-gray-900 text-lg">
                       <span>Total</span>
-                      <span>{formatCurrency(total)}</span>
+                      <span>{formatCurrency(finalTotal)}</span>
                     </div>
                   </div>
                 </div>
@@ -119,14 +171,44 @@ export default function CartPage() {
               {/* Promo Code */}
               <Card className="p-6">
                 <h3 className="font-semibold text-gray-900 mb-3">Have a promo code?</h3>
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    placeholder="Enter code"
-                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  />
-                  <Button variant="outline">Apply</Button>
-                </div>
+                {appliedCoupon ? (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <p className="text-green-700 font-medium">
+                        {appliedCoupon.code} applied
+                      </p>
+                      <button
+                        onClick={handleRemoveCoupon}
+                        className="text-sm text-red-600 hover:text-red-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <p className="text-sm text-green-600 mt-1">
+                      {appliedCoupon.type === 'percentage' 
+                        ? `${appliedCoupon.discount_value}% off` 
+                        : formatCurrency(appliedCoupon.discount_value) + ' off'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                      placeholder="Enter code"
+                      className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
+                    />
+                    <Button 
+                      variant="outline" 
+                      onClick={handleApplyCoupon}
+                      disabled={applyingCoupon || !promoCode.trim()}
+                    >
+                      {applyingCoupon ? 'Applying...' : 'Apply'}
+                    </Button>
+                  </div>
+                )}
               </Card>
 
               {/* Delivery Info */}

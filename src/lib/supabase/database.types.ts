@@ -166,7 +166,7 @@ export interface Database {
           delivery_address: string;
           delivery_phone: string;
           delivery_instructions?: string | null;
-          payment_method?: 'card' | 'cash' | 'wallet';
+          payment_method?: 'card' | 'cash' | 'razorpay';
           payment_status?: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded';
           payment_id?: string | null;
           order_date?: string;
@@ -188,7 +188,7 @@ export interface Database {
           delivery_address?: string;
           delivery_phone?: string;
           delivery_instructions?: string | null;
-          payment_method?: 'card' | 'cash' | 'wallet';
+          payment_method?: 'card' | 'cash' | 'razorpay';
           payment_status?: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded';
           payment_id?: string | null;
           order_date?: string;
