@@ -4,6 +4,7 @@ import { generateOrderNumber } from '@/lib/utils';
 import type { Database } from '@/lib/supabase/database.types';
 
 type Order = Database['public']['Tables']['orders']['Row'];
+type OrderInsert = Database['public']['Tables']['orders']['Insert'];
 type OrderUpdate = Database['public']['Tables']['orders']['Update'];
 
 // GET /api/orders - Get user's orders
@@ -148,28 +149,30 @@ export async function POST(request: NextRequest) {
     const orderNumber = generateOrderNumber();
 
     // Create order
-    const { data: order, error: orderError } = await supabase
+    const orderData: OrderInsert = {
+      user_id: userId,
+      order_number: orderNumber,
+      subtotal,
+      discount,
+      delivery_fee: deliveryFee,
+      tax,
+      total,
+      coupon_code: couponCode,
+      delivery_address: deliveryAddress,
+      delivery_latitude: latitude || null,
+      delivery_longitude: longitude || null,
+      delivery_phone: deliveryPhone,
+      delivery_instructions: deliveryInstructions,
+      payment_method: paymentMethod,
+      payment_status: 'pending',
+      status: 'pending',
+    };
+
+    const { data: order, error: orderError } = await (supabase as any)
       .from('orders')
-      .insert({
-        user_id: userId,
-        order_number: orderNumber,
-        subtotal,
-        discount,
-        delivery_fee: deliveryFee,
-        tax,
-        total,
-        coupon_code: couponCode,
-        delivery_address: deliveryAddress,
-        delivery_latitude: latitude || null,
-        delivery_longitude: longitude || null,
-        delivery_phone: deliveryPhone,
-        delivery_instructions: deliveryInstructions,
-        payment_method: paymentMethod,
-        payment_status: 'pending',
-        status: 'pending',
-      })
+      .insert(orderData)
       .select()
-      .single() as { data: any; error: any };
+      .single();
 
     if (orderError) {
       return NextResponse.json({ error: orderError.message }, { status: 500 });
